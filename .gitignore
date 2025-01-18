@@ -1,0 +1,15 @@
+# build output
+/bin/
+/dist/
+/recon
+*.test
+*.out
+coverage.html
+
+# locally installed tooling (make tools)
+/.tools/
+
+# editors and OS noise
+.idea/
+.vscode/
+.DS_Store
