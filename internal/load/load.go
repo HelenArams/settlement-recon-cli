@@ -9,6 +9,8 @@
 package load
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -74,7 +76,7 @@ func Clearings(r io.Reader, name string) ([]model.Clearing, error) {
 // row to fn. Row-level problems are collected; structural problems (bad
 // header, unreadable input) abort immediately.
 func readRecords(r io.Reader, name string, cols []column, fn func(int, []string, layout) *RowError) error {
-	cr := csv.NewReader(r)
+	cr := csv.NewReader(skipBOM(r))
 	cr.TrimLeadingSpace = true
 	cr.ReuseRecord = true
 
@@ -110,6 +112,21 @@ func readRecords(r io.Reader, name string, cols []column, fn func(int, []string,
 		return errs
 	}
 	return nil
+}
+
+// utf8BOM is the byte order mark Excel and several scheme portals prepend to
+// UTF-8 exports. encoding/csv would otherwise hand it back glued to the first
+// header cell, which then fails to match any column alias.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
+// skipBOM returns a reader positioned after a leading UTF-8 BOM, if present.
+// Windows line endings need no special handling: encoding/csv accepts CRLF.
+func skipBOM(r io.Reader) io.Reader {
+	br := bufio.NewReader(r)
+	if lead, err := br.Peek(len(utf8BOM)); err == nil && bytes.Equal(lead, utf8BOM) {
+		_, _ = br.Discard(len(utf8BOM))
+	}
+	return br
 }
 
 func rowErrorFromCSV(name string, err error) *RowError {
