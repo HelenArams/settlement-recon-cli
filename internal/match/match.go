@@ -1,16 +1,24 @@
 // Package match pairs issuer authorizations with scheme clearing records.
 //
-// Matching runs in tiers, strictest first. A presentment consumes the
-// authorization it matches so no two captures settle against the same hold;
-// reversals and chargebacks only link back to the authorization they adjust,
-// because they always follow a presentment of their own. Processing order is
-// fixed (settlement date, then ARN) so the same input always yields the same
-// report regardless of how the files were sorted.
+// Matching runs in tiers, strictest first:
+//
+//	tier 1  same card, currency, approval code and amount
+//	tier 2  same card, currency and merchant; amount within a tolerance in
+//	        basis points; settled within a window of days
+//	tier 3  same card, currency and merchant within the window, any amount;
+//	        reported as PARTIAL because the money does not agree
+//
+// A presentment consumes the authorization it matches so no two captures
+// settle against the same hold; reversals and chargebacks only link back to
+// the authorization they adjust, because they always follow a presentment of
+// their own. Processing order is fixed (settlement date, then ARN) so the
+// same input always yields the same report regardless of file order.
 package match
 
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/HelenArams/settlement-recon-cli/internal/model"
@@ -20,8 +28,12 @@ import (
 type Outcome string
 
 const (
-	// Matched means the clearing record was paired with an authorization.
+	// Matched means the clearing record was paired with an authorization
+	// whose amount agrees, exactly or within tolerance.
 	Matched Outcome = "MATCHED"
+	// Partial means an authorization was found but the amount differs
+	// beyond tolerance: partial captures, tips, FX swings past the limit.
+	Partial Outcome = "PARTIAL"
 	// UnmatchedClearing means money settled that no authorization explains.
 	UnmatchedClearing Outcome = "UNMATCHED_CLEARING"
 	// OpenAuth is an authorization still waiting for its presentment.
@@ -29,7 +41,7 @@ const (
 )
 
 // Outcomes lists every outcome in report order.
-var Outcomes = []Outcome{Matched, UnmatchedClearing, OpenAuth}
+var Outcomes = []Outcome{Matched, Partial, UnmatchedClearing, OpenAuth}
 
 // IsException reports whether an outcome needs a human to look at it. Open
 // authorizations are normal between capture and settlement, so they are not.
@@ -39,6 +51,14 @@ func (o Outcome) IsException() bool {
 
 // Options tune the matcher.
 type Options struct {
+	// ToleranceBps is how far a cleared amount may drift from the authorized
+	// amount and still count as MATCHED at tier 2, in basis points of the
+	// authorized amount (50 = 0.5%). Covers FX rate movement between
+	// authorization and clearing on cross-currency transactions.
+	ToleranceBps int
+	// WindowDays is the largest gap, in calendar days, between the
+	// authorization and the settlement date for tiers 2 and 3.
+	WindowDays int
 	// AsOf is the reconciliation date. Zero means "the latest settlement
 	// date in the clearing file", which keeps batch runs reproducible.
 	AsOf time.Time
@@ -46,11 +66,21 @@ type Options struct {
 
 // DefaultOptions are sensible for a daily issuer-side run.
 func DefaultOptions() Options {
-	return Options{}
+	return Options{ToleranceBps: 50, WindowDays: 3}
 }
 
 // Validate rejects option values that cannot be meant.
 func (o Options) Validate() error {
+	var problems []string
+	if o.ToleranceBps < 0 || o.ToleranceBps > 10_000 {
+		problems = append(problems, fmt.Sprintf("tolerance must be between 0 and 10000 bps, got %d", o.ToleranceBps))
+	}
+	if o.WindowDays < 0 {
+		problems = append(problems, fmt.Sprintf("window must not be negative, got %d days", o.WindowDays))
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("invalid options: %s", strings.Join(problems, "; "))
+	}
 	return nil
 }
 
@@ -58,7 +88,7 @@ func (o Options) Validate() error {
 // authorization. Auth and Clearing point into the slices given to Reconcile.
 type Result struct {
 	Outcome  Outcome
-	Tier     int // 1 for an exact match; 0 when no match was made
+	Tier     int // 1..3 for the tier that matched; 0 when no match was made
 	Auth     *model.Auth
 	Clearing *model.Clearing
 	Delta    int64  // Clearing.Amount - Auth.Amount, when both are present
@@ -133,12 +163,18 @@ type exactKey struct {
 	amount                    int64
 }
 
+// cardKey narrows tiers 2 and 3 to the same card and currency.
+type cardKey struct {
+	token, currency string
+}
+
 type matcher struct {
 	opt      Options
 	auths    []model.Auth
 	byExact  map[exactKey][]int // candidate indexes in chronological order
-	consumed []bool             // a presentment has settled against this auth
-	linked   []bool             // any clearing record references this auth
+	byCard   map[cardKey][]int
+	consumed []bool // a presentment has settled against this auth
+	linked   []bool // any clearing record references this auth
 }
 
 func newMatcher(auths []model.Auth, opt Options) *matcher {
@@ -146,6 +182,7 @@ func newMatcher(auths []model.Auth, opt Options) *matcher {
 		opt:      opt,
 		auths:    auths,
 		byExact:  make(map[exactKey][]int, len(auths)),
+		byCard:   make(map[cardKey][]int, len(auths)),
 		consumed: make([]bool, len(auths)),
 		linked:   make([]bool, len(auths)),
 	}
@@ -155,6 +192,8 @@ func newMatcher(auths []model.Auth, opt Options) *matcher {
 			k := exactKey{a.CardToken, a.Currency, a.AuthCode, a.Amount}
 			m.byExact[k] = append(m.byExact[k], i)
 		}
+		ck := cardKey{a.CardToken, a.Currency}
+		m.byCard[ck] = append(m.byCard[ck], i)
 	}
 	return m
 }
@@ -164,7 +203,7 @@ func (m *matcher) resolve(c *model.Clearing) Result {
 	consuming := c.Type == model.Presentment
 	i, tier, ok := m.find(c, consuming)
 	if !ok {
-		return Result{Outcome: UnmatchedClearing, Clearing: c, Note: "no authorization found for this card and amount"}
+		return Result{Outcome: UnmatchedClearing, Clearing: c, Note: "no authorization for this card and merchant within the window"}
 	}
 	a := &m.auths[i]
 	m.linked[i] = true
@@ -172,7 +211,10 @@ func (m *matcher) resolve(c *model.Clearing) Result {
 		m.consumed[i] = true
 	}
 	r := Result{Outcome: Matched, Tier: tier, Auth: a, Clearing: c, Delta: c.Amount - a.Amount}
-	r.Note = m.note(a, c)
+	if tier == 3 {
+		r.Outcome = Partial
+	}
+	r.Note = m.note(a, c, tier)
 	return r
 }
 
@@ -181,6 +223,12 @@ func (m *matcher) find(c *model.Clearing, consuming bool) (idx, tier int, ok boo
 		if i, ok := m.tier1(c, consuming); ok {
 			return i, 1, true
 		}
+	}
+	if i, ok := m.tier2(c, consuming); ok {
+		return i, 2, true
+	}
+	if i, ok := m.tier3(c, consuming); ok {
+		return i, 3, true
 	}
 	return -1, 0, false
 }
@@ -194,12 +242,59 @@ func (m *matcher) tier1(c *model.Clearing, consuming bool) (int, bool) {
 		if !m.available(i, consuming) {
 			continue
 		}
-		days := absInt(daysBetween(m.auths[i].Date(), c.SettlementDate))
+		days := absInt(m.daysApart(i, c))
 		if best < 0 || days < bestDays {
 			best, bestDays = i, days
 		}
 	}
 	return best, best >= 0
+}
+
+// tier2 matches the same card and merchant within the date window when the
+// amount is inside the tolerance. The closest amount wins, then the closest
+// date.
+func (m *matcher) tier2(c *model.Clearing, consuming bool) (int, bool) {
+	best, bestDelta, bestDays := -1, int64(0), 0
+	for _, i := range m.merchantCandidates(c, consuming) {
+		a := &m.auths[i]
+		if !model.WithinBps(a.Amount, c.Amount, m.opt.ToleranceBps) {
+			continue
+		}
+		delta, days := absInt64(c.Amount-a.Amount), absInt(m.daysApart(i, c))
+		if best < 0 || delta < bestDelta || (delta == bestDelta && days < bestDays) {
+			best, bestDelta, bestDays = i, delta, days
+		}
+	}
+	return best, best >= 0
+}
+
+// tier3 matches the same card and merchant within the date window regardless
+// of amount. The closest date wins, then the closest amount.
+func (m *matcher) tier3(c *model.Clearing, consuming bool) (int, bool) {
+	best, bestDelta, bestDays := -1, int64(0), 0
+	for _, i := range m.merchantCandidates(c, consuming) {
+		delta, days := absInt64(c.Amount-m.auths[i].Amount), absInt(m.daysApart(i, c))
+		if best < 0 || days < bestDays || (days == bestDays && delta < bestDelta) {
+			best, bestDelta, bestDays = i, delta, days
+		}
+	}
+	return best, best >= 0
+}
+
+// merchantCandidates returns the authorizations on the same card, currency
+// and merchant whose date is within the window of c, in chronological order.
+func (m *matcher) merchantCandidates(c *model.Clearing, consuming bool) []int {
+	var out []int
+	for _, i := range m.byCard[cardKey{c.CardToken, c.Currency}] {
+		if !m.available(i, consuming) || m.auths[i].MerchantID != c.MerchantID {
+			continue
+		}
+		if absInt(m.daysApart(i, c)) > m.opt.WindowDays {
+			continue
+		}
+		out = append(out, i)
+	}
+	return out
 }
 
 // available reports whether auth i may still be matched by a record that
@@ -208,12 +303,40 @@ func (m *matcher) available(i int, consuming bool) bool {
 	return !consuming || !m.consumed[i]
 }
 
-func (m *matcher) note(a *model.Auth, c *model.Clearing) string {
-	days := daysBetween(a.Date(), c.SettlementDate)
-	if days < 0 {
-		return fmt.Sprintf("settled %d day(s) before the authorization", -days)
+// daysApart is the signed number of days from the authorization day of auth
+// i to the settlement date of c.
+func (m *matcher) daysApart(i int, c *model.Clearing) int {
+	return daysBetween(m.auths[i].Date(), c.SettlementDate)
+}
+
+// note explains anything about a match that a reviewer would want to know.
+func (m *matcher) note(a *model.Auth, c *model.Clearing, tier int) string {
+	var parts []string
+	if delta := c.Amount - a.Amount; delta != 0 {
+		sign := "+"
+		if delta < 0 {
+			sign = "-"
+		}
+		part := fmt.Sprintf("amount off by %s%s (%d bps)", sign, model.FormatAmount(absInt64(delta), a.Currency), model.Bps(a.Amount, c.Amount))
+		if tier == 3 {
+			part += fmt.Sprintf(", outside %d bps tolerance", m.opt.ToleranceBps)
+		}
+		parts = append(parts, part)
 	}
-	return ""
+	days := daysBetween(a.Date(), c.SettlementDate)
+	switch {
+	case days < 0:
+		parts = append(parts, fmt.Sprintf("settled %d day(s) before the authorization", -days))
+	case days > m.opt.WindowDays:
+		parts = append(parts, fmt.Sprintf("settled %d days after auth, outside %d-day window", days, m.opt.WindowDays))
+	}
+	if tier == 1 && a.MerchantID != c.MerchantID {
+		parts = append(parts, fmt.Sprintf("merchant differs: %s vs %s", a.MerchantID, c.MerchantID))
+	}
+	if tier > 1 && c.AuthCode != "" && a.AuthCode != "" && c.AuthCode != a.AuthCode {
+		parts = append(parts, fmt.Sprintf("auth code differs: %s vs %s", a.AuthCode, c.AuthCode))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // deriveAsOf picks the reconciliation date from the data: the latest
@@ -303,6 +426,13 @@ func daysBetween(a, b time.Time) int {
 }
 
 func absInt(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func absInt64(v int64) int64 {
 	if v < 0 {
 		return -v
 	}
