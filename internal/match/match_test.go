@@ -85,7 +85,7 @@ func TestTier1SkippedWithoutAuthCode(t *testing.T) {
 
 func TestTier1PrefersNearestAuthorization(t *testing.T) {
 	auths := []model.Auth{
-		auth("A-old", "tok", 500, "EUR", "ABC123", "M-1", at(1, 9)),
+		auth("A-old", "tok", 500, "EUR", "ABC123", "M-1", at(6, 9)),
 		auth("A-new", "tok", 500, "EUR", "ABC123", "M-1", at(10, 9)),
 	}
 	clearings := []model.Clearing{clearing("C-1", "tok", 500, "EUR", "ABC123", "M-1", day(11), model.Presentment)}

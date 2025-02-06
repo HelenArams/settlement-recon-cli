@@ -11,8 +11,11 @@
 // A presentment consumes the authorization it matches so no two captures
 // settle against the same hold; reversals and chargebacks only link back to
 // the authorization they adjust, because they always follow a presentment of
-// their own. Processing order is fixed (settlement date, then ARN) so the
-// same input always yields the same report regardless of file order.
+// their own. A clearing record whose ARN was already seen is a DUPLICATE and
+// takes no part in matching. Authorizations nothing settled against are OPEN
+// until they are older than the expiry, then EXPIRED. Processing order is
+// fixed (settlement date, then ARN) so the same input always yields the same
+// report regardless of file order.
 package match
 
 import (
@@ -36,12 +39,17 @@ const (
 	Partial Outcome = "PARTIAL"
 	// UnmatchedClearing means money settled that no authorization explains.
 	UnmatchedClearing Outcome = "UNMATCHED_CLEARING"
+	// ExpiredAuth is an authorization that nothing settled against within
+	// the expiry period: the hold should be released.
+	ExpiredAuth Outcome = "EXPIRED_AUTH"
+	// Duplicate is a clearing record whose ARN already appeared in the file.
+	Duplicate Outcome = "DUPLICATE"
 	// OpenAuth is an authorization still waiting for its presentment.
 	OpenAuth Outcome = "OPEN_AUTH"
 )
 
 // Outcomes lists every outcome in report order.
-var Outcomes = []Outcome{Matched, Partial, UnmatchedClearing, OpenAuth}
+var Outcomes = []Outcome{Matched, Partial, UnmatchedClearing, ExpiredAuth, Duplicate, OpenAuth}
 
 // IsException reports whether an outcome needs a human to look at it. Open
 // authorizations are normal between capture and settlement, so they are not.
@@ -59,6 +67,9 @@ type Options struct {
 	// WindowDays is the largest gap, in calendar days, between the
 	// authorization and the settlement date for tiers 2 and 3.
 	WindowDays int
+	// ExpireDays is how many days an authorization may stay open before it
+	// is reported as EXPIRED_AUTH, measured from its day to AsOf.
+	ExpireDays int
 	// AsOf is the reconciliation date. Zero means "the latest settlement
 	// date in the clearing file", which keeps batch runs reproducible.
 	AsOf time.Time
@@ -66,7 +77,7 @@ type Options struct {
 
 // DefaultOptions are sensible for a daily issuer-side run.
 func DefaultOptions() Options {
-	return Options{ToleranceBps: 50, WindowDays: 3}
+	return Options{ToleranceBps: 50, WindowDays: 3, ExpireDays: 7}
 }
 
 // Validate rejects option values that cannot be meant.
@@ -77,6 +88,9 @@ func (o Options) Validate() error {
 	}
 	if o.WindowDays < 0 {
 		problems = append(problems, fmt.Sprintf("window must not be negative, got %d days", o.WindowDays))
+	}
+	if o.ExpireDays < 0 {
+		problems = append(problems, fmt.Sprintf("expiry must not be negative, got %d days", o.ExpireDays))
 	}
 	if len(problems) > 0 {
 		return fmt.Errorf("invalid options: %s", strings.Join(problems, "; "))
@@ -133,9 +147,15 @@ func Reconcile(auths []model.Auth, clearings []model.Clearing, opt Options) (*Re
 	m := newMatcher(auths, opt)
 
 	results := make([]Result, 0, len(auths)+len(clearings))
+	seen := make(map[string]struct{}, len(clearings))
 	var adjustments []int // reversals and chargebacks, linked once presentments are placed
 	for _, ci := range clearingOrder(clearings) {
 		c := &clearings[ci]
+		if _, dup := seen[c.ARN]; dup {
+			results = append(results, Result{Outcome: Duplicate, Clearing: c, Note: "ARN already present in the clearing file"})
+			continue
+		}
+		seen[c.ARN] = struct{}{}
 		if c.Type != model.Presentment {
 			adjustments = append(adjustments, ci)
 			continue
@@ -149,7 +169,13 @@ func Reconcile(auths []model.Auth, clearings []model.Clearing, opt Options) (*Re
 		if m.linked[i] {
 			continue
 		}
-		results = append(results, Result{Outcome: OpenAuth, Auth: &auths[i]})
+		a := &auths[i]
+		if age := daysBetween(a.Date(), asOf); age > opt.ExpireDays {
+			note := fmt.Sprintf("open for %d days, expiry is %d", age, opt.ExpireDays)
+			results = append(results, Result{Outcome: ExpiredAuth, Auth: a, Note: note})
+			continue
+		}
+		results = append(results, Result{Outcome: OpenAuth, Auth: a})
 	}
 	sortResults(results)
 	return &Reconciliation{AsOf: asOf, Options: opt, Results: results}, nil
