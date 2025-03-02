@@ -1,0 +1,381 @@
+{
+  "as_of": "2025-02-14",
+  "options": {
+    "tolerance_bps": 50,
+    "window_days": 3,
+    "expire_days": 7
+  },
+  "summary": {
+    "total": 15,
+    "exceptions": 4,
+    "outcomes": {
+      "DUPLICATE": 1,
+      "EXPIRED_AUTH": 1,
+      "MATCHED": 10,
+      "OPEN_AUTH": 1,
+      "PARTIAL": 1,
+      "UNMATCHED_CLEARING": 1
+    },
+    "tiers": {
+      "1": 8,
+      "2": 2,
+      "3": 1
+    },
+    "net_settlement": [
+      {
+        "currency": "EUR",
+        "presented": "282.35",
+        "reversed": "-35.00",
+        "chargebacks": "-199.00",
+        "net": "48.35"
+      },
+      {
+        "currency": "GBP",
+        "presented": "9.99",
+        "reversed": "0.00",
+        "chargebacks": "0.00",
+        "net": "9.99"
+      },
+      {
+        "currency": "JPY",
+        "presented": "1500",
+        "reversed": "0",
+        "chargebacks": "0",
+        "net": "1500"
+      },
+      {
+        "currency": "USD",
+        "presented": "318.20",
+        "reversed": "0.00",
+        "chargebacks": "0.00",
+        "net": "318.20"
+      }
+    ]
+  },
+  "results": [
+    {
+      "outcome": "EXPIRED_AUTH",
+      "auth": {
+        "id": "A-1006",
+        "card_token": "tok_c2d8",
+        "amount": "15.50",
+        "currency": "GBP",
+        "auth_code": "2K3L4M",
+        "merchant_id": "M-TRANSIT",
+        "timestamp": "2025-02-05T07:45:00Z"
+      },
+      "clearing": null,
+      "note": "open for 9 days, expiry is 7"
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 1,
+      "auth": {
+        "id": "A-1001",
+        "card_token": "tok_4f9a",
+        "amount": "42.10",
+        "currency": "EUR",
+        "auth_code": "1A2B3C",
+        "merchant_id": "M-ESPRESSO",
+        "timestamp": "2025-02-10T08:15:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001001",
+        "card_token": "tok_4f9a",
+        "amount": "42.10",
+        "currency": "EUR",
+        "auth_code": "1A2B3C",
+        "merchant_id": "M-ESPRESSO",
+        "settlement_date": "2025-02-11",
+        "type": "presentment"
+      },
+      "delta": "0.00"
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 2,
+      "auth": {
+        "id": "A-1002",
+        "card_token": "tok_4f9a",
+        "amount": "120.00",
+        "currency": "EUR",
+        "auth_code": "9Z8Y7X",
+        "merchant_id": "M-GROCER",
+        "timestamp": "2025-02-10T18:42:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001002",
+        "card_token": "tok_4f9a",
+        "amount": "120.00",
+        "currency": "EUR",
+        "merchant_id": "M-GROCER",
+        "settlement_date": "2025-02-12",
+        "type": "presentment"
+      },
+      "delta": "0.00"
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 2,
+      "auth": {
+        "id": "A-1003",
+        "card_token": "tok_b71c",
+        "amount": "89.99",
+        "currency": "USD",
+        "auth_code": "4D5E6F",
+        "merchant_id": "M-ELECTRO",
+        "timestamp": "2025-02-11T12:03:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001003",
+        "card_token": "tok_b71c",
+        "amount": "90.20",
+        "currency": "USD",
+        "auth_code": "4D5E6F",
+        "merchant_id": "M-ELECTRO",
+        "settlement_date": "2025-02-12",
+        "type": "presentment"
+      },
+      "delta": "0.21",
+      "note": "amount off by +0.21 (23 bps)"
+    },
+    {
+      "outcome": "PARTIAL",
+      "tier": 3,
+      "auth": {
+        "id": "A-1004",
+        "card_token": "tok_b71c",
+        "amount": "250.00",
+        "currency": "USD",
+        "auth_code": "7G8H9I",
+        "merchant_id": "M-HOTEL",
+        "timestamp": "2025-02-09T15:30:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001004",
+        "card_token": "tok_b71c",
+        "amount": "180.00",
+        "currency": "USD",
+        "auth_code": "7G8H9I",
+        "merchant_id": "M-HOTEL",
+        "settlement_date": "2025-02-12",
+        "type": "presentment"
+      },
+      "delta": "-70.00",
+      "note": "amount off by -70.00 (2800 bps), outside 50 bps tolerance"
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 1,
+      "auth": {
+        "id": "A-1010",
+        "card_token": "tok_a6b0",
+        "amount": "35.00",
+        "currency": "EUR",
+        "auth_code": "8Q9R0S",
+        "merchant_id": "M-THEATRE",
+        "timestamp": "2025-02-11T21:00:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001010",
+        "card_token": "tok_a6b0",
+        "amount": "35.00",
+        "currency": "EUR",
+        "auth_code": "8Q9R0S",
+        "merchant_id": "M-THEATRE",
+        "settlement_date": "2025-02-12",
+        "type": "presentment"
+      },
+      "delta": "0.00"
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 1,
+      "auth": {
+        "id": "A-1005",
+        "card_token": "tok_c2d8",
+        "amount": "48.00",
+        "currency": "USD",
+        "auth_code": "3J4K5L",
+        "merchant_id": "M-CARRENT",
+        "timestamp": "2025-02-03T16:20:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001005",
+        "card_token": "tok_c2d8",
+        "amount": "48.00",
+        "currency": "USD",
+        "auth_code": "3J4K5L",
+        "merchant_id": "M-CARRENT",
+        "settlement_date": "2025-02-13",
+        "type": "presentment"
+      },
+      "delta": "0.00",
+      "note": "settled 10 days after auth, outside 3-day window"
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 1,
+      "auth": {
+        "id": "A-1008",
+        "card_token": "tok_e93f",
+        "amount": "9.99",
+        "currency": "GBP",
+        "auth_code": "6M7N8O",
+        "merchant_id": "M-APP-STORE",
+        "timestamp": "2025-02-12T11:00:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001008",
+        "card_token": "tok_e93f",
+        "amount": "9.99",
+        "currency": "GBP",
+        "auth_code": "6M7N8O",
+        "merchant_id": "M-APPSTORE",
+        "settlement_date": "2025-02-13",
+        "type": "presentment"
+      },
+      "delta": "0.00",
+      "note": "merchant differs: M-APP-STORE vs M-APPSTORE"
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 1,
+      "auth": {
+        "id": "A-1009",
+        "card_token": "tok_4f9a",
+        "amount": "12.00",
+        "currency": "EUR",
+        "auth_code": "4W5X6Y",
+        "merchant_id": "M-COFFEE",
+        "timestamp": "2025-02-12T09:05:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001009",
+        "card_token": "tok_4f9a",
+        "amount": "12.00",
+        "currency": "EUR",
+        "auth_code": "4W5X6Y",
+        "merchant_id": "M-COFFEE",
+        "settlement_date": "2025-02-13",
+        "type": "presentment"
+      },
+      "delta": "0.00"
+    },
+    {
+      "outcome": "DUPLICATE",
+      "auth": null,
+      "clearing": {
+        "arn": "74000000000000000001009",
+        "card_token": "tok_4f9a",
+        "amount": "12.00",
+        "currency": "EUR",
+        "auth_code": "4W5X6Y",
+        "merchant_id": "M-COFFEE",
+        "settlement_date": "2025-02-13",
+        "type": "presentment"
+      },
+      "note": "ARN already present in the clearing file"
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 1,
+      "auth": {
+        "id": "A-1010",
+        "card_token": "tok_a6b0",
+        "amount": "35.00",
+        "currency": "EUR",
+        "auth_code": "8Q9R0S",
+        "merchant_id": "M-THEATRE",
+        "timestamp": "2025-02-11T21:00:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001011",
+        "card_token": "tok_a6b0",
+        "amount": "35.00",
+        "currency": "EUR",
+        "auth_code": "8Q9R0S",
+        "merchant_id": "M-THEATRE",
+        "settlement_date": "2025-02-13",
+        "type": "reversal"
+      },
+      "delta": "0.00"
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 1,
+      "auth": {
+        "id": "A-1012",
+        "card_token": "tok_d4e5",
+        "amount": "1500",
+        "currency": "JPY",
+        "auth_code": "8A8B8C",
+        "merchant_id": "M-RAMEN",
+        "timestamp": "2025-02-12T03:40:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001013",
+        "card_token": "tok_d4e5",
+        "amount": "1500",
+        "currency": "JPY",
+        "auth_code": "8A8B8C",
+        "merchant_id": "M-RAMEN",
+        "settlement_date": "2025-02-13",
+        "type": "presentment"
+      },
+      "delta": "0"
+    },
+    {
+      "outcome": "UNMATCHED_CLEARING",
+      "auth": null,
+      "clearing": {
+        "arn": "74000000000000000001099",
+        "card_token": "tok_ffff",
+        "amount": "73.25",
+        "currency": "EUR",
+        "merchant_id": "M-UNKNOWN",
+        "settlement_date": "2025-02-13",
+        "type": "presentment"
+      },
+      "note": "no authorization for this card and merchant within the window"
+    },
+    {
+      "outcome": "OPEN_AUTH",
+      "auth": {
+        "id": "A-1007",
+        "card_token": "tok_e93f",
+        "amount": "60.00",
+        "currency": "GBP",
+        "auth_code": "5N6O7P",
+        "merchant_id": "M-BOOKS",
+        "timestamp": "2025-02-13T19:10:00Z"
+      },
+      "clearing": null
+    },
+    {
+      "outcome": "MATCHED",
+      "tier": 1,
+      "auth": {
+        "id": "A-1011",
+        "card_token": "tok_a6b0",
+        "amount": "199.00",
+        "currency": "EUR",
+        "auth_code": "1T2U3V",
+        "merchant_id": "M-SHOES",
+        "timestamp": "2025-01-28T10:00:00Z"
+      },
+      "clearing": {
+        "arn": "74000000000000000001012",
+        "card_token": "tok_a6b0",
+        "amount": "199.00",
+        "currency": "EUR",
+        "auth_code": "1T2U3V",
+        "merchant_id": "M-SHOES",
+        "settlement_date": "2025-02-14",
+        "type": "chargeback"
+      },
+      "delta": "0.00",
+      "note": "settled 17 days after auth, outside 3-day window"
+    }
+  ]
+}
