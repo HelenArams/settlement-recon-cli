@@ -1,0 +1,40 @@
+version: 2
+
+project_name: settlement-recon-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: recon
+    main: ./cmd/recon
+    binary: recon
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "recon_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - testdata/*.csv
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^readme"
+      - "^fix typo"
