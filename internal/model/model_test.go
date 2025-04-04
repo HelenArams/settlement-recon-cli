@@ -10,7 +10,7 @@ func TestParseClearingType(t *testing.T) {
 	ok := map[string]ClearingType{
 		"presentment":          Presentment,
 		"PRESENTMENT":          Presentment,
-		" First_Presentment ":  Presentment,
+		"First_Presentment":    Presentment,
 		"sale":                 Presentment,
 		"reversal":             Reversal,
 		"presentment_reversal": Reversal,

@@ -2,6 +2,7 @@ package load
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +29,7 @@ func DetectFile(path string) (Kind, error) {
 
 func Detect(r io.Reader, name string) (Kind, error) {
 	header, err := csv.NewReader(skipBOM(r)).Read()
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		return "", fmt.Errorf("%s: file is empty", name)
 	}
 	if err != nil {
